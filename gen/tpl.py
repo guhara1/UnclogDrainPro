@@ -203,6 +203,13 @@ footer a:hover{color:%(tx)s}
 """ % COL
 
 
+CSS_HASH = __import__('hashlib').md5(CSS.encode('utf-8')).hexdigest()[:10]
+CSS_HREF = '/s.%s.css' % CSS_HASH
+"""★CSS 파일 이름에 내용 해시를 박는다.
+   ─ 이름이 고정이면 긴 캐시가 **고친 화면을 며칠 동안 가린다**(2026-10-13 사장님이 보신 자리).
+   ─ 내용이 바뀌면 이름이 바뀌니, 긴 캐시를 걸어도 늘 새것이 간다."""
+
+
 def head(title, desc, canon, extra='', jsonld='', image=''):
     v = ('<meta name="naver-site-verification" content="%s">' % cfg.VERIFY_NAVER) if cfg.VERIFY_NAVER else ''
     return (
@@ -220,11 +227,11 @@ def head(title, desc, canon, extra='', jsonld='', image=''):
         '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>'
         '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/'
         'dist/web/variable/pretendardvariable-dynamic-subset.min.css">'
-        '<link rel="stylesheet" href="/s.css">%s%s%s</head><body>'
+        '<link rel="stylesheet" href="%s">%s%s%s</head><body>'
         % (title, desc, canon, title, desc, canon, cfg.BRAND, COL['bg'],
            ('<meta property="og:image" content="%s"><meta name="twitter:image" content="%s">'
             % (image, image)) if image else '',
-           v, extra, jsonld))
+           CSS_HREF, v, extra, jsonld))
 
 
 NAV = [('/', '홈'), ('/service/', '서비스'), ('/area/', '지역'), ('/price/', '요금'),

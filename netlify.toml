@@ -8,10 +8,23 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# 이름에 해시가 박힌 CSS 는 내용이 바뀌면 이름도 바뀐다 — 영구 캐시가 안전하다
+[[headers]]
+  for = "/s.*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# ★이름이 고정인 파일에는 긴 캐시를 걸지 않는다.
+#   걸어 뒀더니 CSS 를 고쳐도 보는 사람 화면이 며칠 동안 옛 모양이었다(2026-10-13).
 [[headers]]
   for = "/s.css"
   [headers.values]
-    Cache-Control = "public, max-age=604800"
+    Cache-Control = "public, max-age=300, must-revalidate"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/*"

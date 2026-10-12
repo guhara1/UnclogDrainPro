@@ -1052,7 +1052,8 @@ def topic_page(s, g, sv, gi):
 
 # ══════════════ 자산·색인 ══════════════
 def assets():
-    w('/s.css', tpl.CSS)
+    w(tpl.CSS_HREF, tpl.CSS)       # 해시 이름 — 긴 캐시를 걸어도 안전하다
+    w('/s.css', tpl.CSS)           # 옛 주소로 들어온 화면을 위해 남겨 둔다(짧은 캐시)
     w('/favicon.svg', svg.favicon())
     w('/%s.txt' % INKEY, INKEY)
     w('/site.webmanifest', json.dumps(
