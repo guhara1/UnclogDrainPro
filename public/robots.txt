@@ -1,0 +1,26 @@
+User-agent: Yeti
+Allow: /
+
+User-agent: NaverBot
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: bingbot
+Allow: /
+
+User-agent: Daumoa
+Allow: /
+
+User-agent: *
+Allow: /
+
+Sitemap: https://unclogdrainpro.netlify.app/sitemap.xml
+Sitemap: https://unclogdrainpro.netlify.app/sitemap-main.xml
+Sitemap: https://unclogdrainpro.netlify.app/sitemap-area.xml
+Sitemap: https://unclogdrainpro.netlify.app/sitemap-shop.xml
+Sitemap: https://unclogdrainpro.netlify.app/rss.xml
