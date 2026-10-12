@@ -79,3 +79,5 @@ COL = {
 }
 
 AI_NOTE = '이 사이트의 안내 글과 그림은 AI 도구의 도움을 받아 만들었습니다.'
+
+INDEXNOW_KEY = 'a7d2f9c41e6b48f0b35d9a27c8e14f63'   # 루트 {key}.txt 와 같아야 한다
