@@ -13,7 +13,7 @@ BRAND = '흐름터'
 BRAND_EN = 'HEUREUMTEO'
 TAGLINE = '전국 누수탐지·누수공사·하수구막힘·배관막힘 24시 출동'
 HOST = 'https://unclogdrainpro.netlify.app'      # ★도메인 사면 여기만 고친다
-VERIFY_NAVER = ''                                 # 서치어드바이저 소유확인 토큰(받으면 채운다)
+VERIFY_NAVER = '1acc1b47d4dfd78d56f29e682fa07ae7415f4bfd'   # 네이버 서치어드바이저 소유확인
 
 TEL = '0508-4260-3312'
 TEL_RAW = '050842603312'
