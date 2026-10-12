@@ -62,7 +62,7 @@ def hero(kicker, line1, line2, seed='x'):
                       60 + h(str(seed) + 'y' + str(i), 300),
                       [2, 2.6, 3.4][h(str(seed) + 'r' + str(i), 3)],
                       [ACC, ACC2, ACC3][h(str(seed) + 'c' + str(i), 3)], '.5')
-                   for i in range(9))
+                   for i in range(6))
     l2 = ('<text x="64" y="252" font-size="40" font-weight="800" fill="%s" '
           'letter-spacing="-1">%s</text>' % (ACC3, esc(line2))) if line2 else ''
     return (
@@ -92,18 +92,18 @@ def shop_card(nm, where, seed=''):
     hue = h(s + 'h', 360)
     k = h(s + 'k', 5)
     pats = [
-        ''.join('<circle cx="%d" cy="%d" r="%d" fill="none" stroke="%s" stroke-width="1.5" opacity=".30"/>'
-                % (300, 90, 30 + i * 26, ACC2) for i in range(5)),
-        ''.join('<rect x="%d" y="%d" width="46" height="46" rx="10" fill="none" stroke="%s" '
-                'stroke-width="1.5" opacity=".28"/>' % (236 + (i % 3) * 56, 22 + (i // 3) * 56, ACC2)
-                for i in range(6)),
-        '<path d="M200 170 C 250 170 250 60 310 60 S 380 170 440 170" stroke="%s" stroke-width="12" '
-        'fill="none" opacity=".28" stroke-linecap="round"/>' % ACC2,
-        ''.join('<path d="M%d 24 L%d 176" stroke="%s" stroke-width="1.5" opacity=".26"/>'
-                % (228 + i * 24, 252 + i * 24, ACC2) for i in range(8)),
-        '<circle cx="330" cy="92" r="58" fill="none" stroke="%s" stroke-width="14" opacity=".22"/>'
-        '<path d="M330 34 a58 58 0 0 1 58 58" stroke="%s" stroke-width="14" fill="none" '
-        'stroke-linecap="round" opacity=".7"/>' % (ACC2, ACC),
+        '<circle cx="330" cy="92" r="40" fill="none" stroke="%s" stroke-width="1.6" opacity=".3"/>'
+        '<circle cx="330" cy="92" r="66" fill="none" stroke="%s" stroke-width="1.6" opacity=".22"/>' % (ACC2, ACC2),
+        '<rect x="266" y="36" width="52" height="52" rx="12" fill="none" stroke="%s" stroke-width="1.6" '
+        'opacity=".3"/><rect x="330" y="90" width="52" height="52" rx="12" fill="none" stroke="%s" '
+        'stroke-width="1.6" opacity=".22"/>' % (ACC2, ACC2),
+        '<path d="M212 168 C 262 168 262 58 322 58 S 392 168 452 168" stroke="%s" stroke-width="11" '
+        'fill="none" opacity=".26" stroke-linecap="round"/>' % ACC2,
+        '<path d="M250 26 L278 174 M290 26 L318 174 M330 26 L358 174 M370 26 L398 174" stroke="%s" '
+        'stroke-width="1.6" opacity=".26"/>' % ACC2,
+        '<circle cx="330" cy="92" r="56" fill="none" stroke="%s" stroke-width="13" opacity=".2"/>'
+        '<path d="M330 36 a56 56 0 0 1 56 56" stroke="%s" stroke-width="13" fill="none" '
+        'stroke-linecap="round" opacity=".65"/>' % (ACC2, ACC),
     ]
     return (
         '<svg class="sc" viewBox="0 0 440 200" role="img" aria-label="%s">'

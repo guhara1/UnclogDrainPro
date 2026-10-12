@@ -181,8 +181,11 @@ def faq_block(qa):
 KWCHIPS = cfg.MAIN_KW + cfg.SUB_KW
 
 
-def strip_bar():
-    li = ''.join('<li>%s</li>' % k for k in KWCHIPS)
+def strip_bar(seed='s'):
+    """쪽마다 12낱말씩 돌려 깐다 — 21개를 전 쪽에 다 깔면 1만 쪽에서 무게가 된다."""
+    o = svg.h(seed, len(KWCHIPS))
+    ks = cfg.MAIN_KW + [KWCHIPS[(o + i * 3) % len(KWCHIPS)] for i in range(8)]
+    li = ''.join('<li>%s</li>' % k for k in ks)
     return '<div class="strip"><ul>%s%s</ul></div>' % (li, li)
 
 
@@ -425,6 +428,9 @@ def dong_page(s, g, d, di):
            bank.bold(bank.fill(bank.spin(a, g['slug'], d['slug'], i), V)))
           for i, (q, a) in enumerate(prose.FAQ_D)]
     sibs = [x for x in g['dongs'] if x['slug'] != d['slug']]
+    if len(sibs) > 20:
+        o = svg.h(d['slug'], len(sibs))
+        sibs = [sibs[(o + i) % len(sibs)] for i in range(20)]
     sibhtml = ('<ul class="chips">' + ''.join(
         '<li><a href="/area/%s/%s/">%s %s</a></li>' % (g['slug'], x['slug'], g['nm'], x['nm'])
         for x in sibs) + '</ul>')
@@ -460,7 +466,7 @@ def dong_page(s, g, d, di):
             + faq_block(qa) + '</div></section>'
             + '<section><div class="wrap"><h2>%s 다른 동네</h2>%s'
               '<h2 style="margin-top:30px">하는 일</h2>%s</div></section>'
-              % (g['nm'], sibhtml, svc_grid(n=8))
+              % (g['nm'], sibhtml, svc_grid(n=6))
             + tpl.footer())
     w(url, html)
     for j, x in enumerate(sh):
@@ -477,7 +483,7 @@ def shop_page(s, g, d, x, sh, spot):
     others = [o for o in sh if o['slug'] != x['slug']]
     oh = '<ul class="chips">' + ''.join(
         '<li><a href="/shop/%s/">%s</a></li>' % (o['slug'], o['nm']) for o in others) + '</ul>'
-    ph = pick_photos(x['slug'], spot[0], 3)
+    ph = pick_photos(x['slug'], spot[0], 2)
     url = '/shop/%s/' % x['slug']
     cr = [('지역 안내', '/area/'), (s['nm'], '/area/%s/' % s['slug']),
           (g['nm'], '/area/%s/' % g['slug']),
@@ -505,7 +511,6 @@ def shop_page(s, g, d, x, sh, spot):
                  x['nm'], s['nm'], g['nm'], d['nm'], x['k1'], x['k2'],
                  cfg.TEL_RAW, svg.ico('call', COL['ink'], 19), cfg.EMERGENCY, cfg.TEL,
                  g['slug'], d['slug'], d['nm'])
-            + strip_bar()
             + '<section><div class="wrap"><h2>%s 소개</h2><div class="read">%s%s</div>'
               '<ul class="chips" style="margin-top:14px">%s</ul></div></section>'
               % (x['nm'], d1, d2,
@@ -514,8 +519,9 @@ def shop_page(s, g, d, x, sh, spot):
             + '<section class="alt"><div class="wrap"><h2>작업 사진</h2>%s</div></section>'
               % case_grid(ph)
             + '<section><div class="wrap"><h2>%s 다른 시공점</h2>%s'
-              '<h2 style="margin-top:28px">요금</h2>%s</div></section>'
-              % (d['nm'], oh, price_block())
+              '<p class="lead" style="margin-top:22px">금액은 현장에서 범위를 보고 '
+              '확정해 드립니다. <a class="more" href="/price/">요금 안내 보기 →</a></p>'
+              '</div></section>' % (d['nm'], oh)
             + tpl.footer())
     w(url, html)
 

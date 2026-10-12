@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """흐름터 — 전국 3층 지역(시도 / 시군구 / 대표 행정동 3곳)을 굽는다.
 
-★사장님 지시(2026-10-12): "행정동 1동, 2동, 3동 이런건 **대표 1곳만**", "행정동 각 3개씩".
-  → 숫자 행정동을 대표동으로 합친 뒤, 구마다 **3곳만** 고른다.
-  고르는 차례는 ①숫자동을 많이 거느린 동(=큰 동) ②행정코드 순. 지명은 **지어내지 않는다**.
+★사장님 지시(2026-10-12): "행정동 1동, 2동, 3동 이런건 **대표 1곳만**".
+  → 숫자 행정동을 대표동으로 합친다. **구마다 전체 행정동을 다 싣는다.**
+  ★처음에 「각 3개씩」을 '구마다 동 3곳'으로 잘못 읽어 강남구에 동이 3곳만 나왔다.
+    사장님이 바로 잡아 주셨다 — 「각 3개씩」은 **행정동마다 시공점 3곳**이다.
+  지명은 **지어내지 않는다** — 실제 목록에서만 뽑는다. 차례는 행정코드 순.
 ★★원본(hjd.geojson)은 광주와 전남을 '전남광주통합특별시' 한 덩어리로 준다
   → 광주 5개 자치구를 떼어 돌려놓는다([[region-loader-truncates-compound-numbered-dong]] 형제).
 ★좌표는 **경계 폴리곤의 무게중심**을 직접 계산한다. GEO 스키마에 쓸 진짜 좌표다.
@@ -105,10 +107,8 @@ def build():
         gus = []
         for gu_raw in sorted(tree[(s_nm, s_slug)]):
             dongs = tree[(s_nm, s_slug)][gu_raw]
-            # 큰 동(숫자동을 많이 거느린 곳) 먼저, 같으면 행정코드 순
-            pick = sorted(dongs.items(), key=lambda kv: (-kv[1]['n'], kv[1]['cd']))[:3]
             dl = []
-            for nm, e in sorted(pick, key=lambda kv: kv[1]['cd']):
+            for nm, e in sorted(dongs.items(), key=lambda kv: kv[1]['cd']):
                 lat = round(sum(p[0] for p in e['pts']) / len(e['pts']), 5) if e['pts'] else None
                 lng = round(sum(p[1] for p in e['pts']) / len(e['pts']), 5) if e['pts'] else None
                 dl.append({'nm': nm, 'slug': slug(nm), 'lat': lat, 'lng': lng})
