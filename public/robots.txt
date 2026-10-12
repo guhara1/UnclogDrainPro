@@ -22,7 +22,9 @@ Allow: /
 Sitemap: https://unclogdrainpro.netlify.app/sitemap.xml
 Sitemap: https://unclogdrainpro.netlify.app/sitemap-main.xml
 Sitemap: https://unclogdrainpro.netlify.app/sitemap-area.xml
+Sitemap: https://unclogdrainpro.netlify.app/sitemap-topic.xml
 Sitemap: https://unclogdrainpro.netlify.app/sitemap-shop.xml
 Sitemap: https://unclogdrainpro.netlify.app/sitemap-shop2.xml
 Sitemap: https://unclogdrainpro.netlify.app/sitemap-shop3.xml
+Sitemap: https://unclogdrainpro.netlify.app/sitemap-image.xml
 Sitemap: https://unclogdrainpro.netlify.app/rss.xml

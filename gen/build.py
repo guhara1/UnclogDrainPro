@@ -56,9 +56,10 @@ def ld(*objs):
                    % json.dumps(o, ensure_ascii=False, separators=(',', ':')) for o in objs)
 
 
-def crumb(items):
+def crumb(items, url=None):
     """★첫 칸에 「홈」을 넣지 않는다([[naver-structured-data-types]])."""
     return {'@context': 'https://schema.org', '@type': 'BreadcrumbList',
+            '@id': cfg.HOST + (url or items[-1][1]) + '#bc',
             'itemListElement': [{'@type': 'ListItem', 'position': i + 1, 'name': n,
                                  'item': cfg.HOST + u} for i, (n, u) in enumerate(items)]}
 
@@ -70,10 +71,45 @@ def faq_ld(qa):
                            for q, a in qa]}
 
 
+MAIN_SVC = cfg.SERVICES[:4]          # 누수탐지·누수공사·하수구막힘·배관막힘
+MAIN_SLUG = [x[0] for x in MAIN_SVC]
+
 ORG = {'@context': 'https://schema.org', '@type': 'Organization', '@id': cfg.HOST + '/#org',
        'name': cfg.BRAND, 'url': cfg.HOST + '/', 'description': cfg.TAGLINE,
        'telephone': cfg.TEL, 'logo': cfg.HOST + '/favicon.svg',
        'areaServed': [{'@type': 'AdministrativeArea', 'name': s['nm']} for s in REG]}
+
+
+SITE = {'@context': 'https://schema.org', '@type': 'WebSite', '@id': cfg.HOST + '/#site',
+        'name': cfg.BRAND, 'url': cfg.HOST + '/', 'inLanguage': 'ko',
+        'publisher': {'@id': cfg.HOST + '/#org'}}
+
+
+def webpage(url, title, desc, img=None, kind='WebPage'):
+    """★모든 쪽에 깔리는 바탕 스키마. 쪽 하나에 WebPage + BreadcrumbList 는 기본이고
+       그 위에 쪽 성격에 맞는 덩이(Service·FAQPage·ItemList…)를 얹는다."""
+    o = {'@context': 'https://schema.org', '@type': kind, '@id': cfg.HOST + url + '#page',
+         'url': cfg.HOST + url, 'name': title, 'description': desc, 'inLanguage': 'ko',
+         'isPartOf': {'@id': cfg.HOST + '/#site'},
+         'publisher': {'@id': cfg.HOST + '/#org'},
+         'breadcrumb': {'@id': cfg.HOST + url + '#bc'}}
+    if img:
+        o['primaryImageOfPage'] = {'@type': 'ImageObject', 'url': cfg.HOST + img}
+    return o
+
+
+def itemlist(name, rows):
+    """★ListItem 에는 image 를 넣는다([[naver-structured-data-types]])."""
+    return {'@context': 'https://schema.org', '@type': 'ItemList', 'name': name,
+            'numberOfItems': len(rows), 'itemListOrder': 'https://schema.org/ItemListUnordered',
+            'itemListElement': [
+                {'@type': 'ListItem', 'position': i + 1, 'name': nm,
+                 'url': cfg.HOST + u, 'image': cfg.HOST + im}
+                for i, (nm, u, im) in enumerate(rows)]}
+
+
+def og_img(seed):
+    return photos.img(pick_photos(seed, None, 1)[0][0])
 
 
 # ══════════════ 공통 조각 ══════════════
@@ -231,10 +267,10 @@ def home():
         '<span class="more">지역 보기 →</span></a>' % (s['slug'], s['nm'],
             ' · '.join(g['nm'] for g in s['gus'][:4])) for s in REG)
     html = (
-        tpl.head(m['title'], m['desc'], cfg.HOST + '/',
-                 jsonld=ld(ORG,
-                           {'@context': 'https://schema.org', '@type': 'WebSite',
-                            'name': cfg.BRAND, 'url': cfg.HOST + '/'},
+        tpl.head(m['title'], m['desc'], cfg.HOST + '/', image=cfg.HOST + og_img('home'),
+                 jsonld=ld(ORG, SITE,
+                           webpage('/', m['title'], m['desc'], og_img('home')),
+                           crumb([(cfg.BRAND, '/')], '/'),
                            {'@context': 'https://schema.org', '@type': 'Service',
                             'serviceType': '누수탐지·누수공사·하수구막힘·배관막힘',
                             'provider': {'@id': cfg.HOST + '/#org'},
@@ -244,6 +280,8 @@ def home():
                                     {'@type': 'Offer', 'itemOffered':
                                      {'@type': 'Service', 'name': nm, 'description': one}}
                                     for _, nm, one, _ in cfg.SERVICES]}},
+                           itemlist('하는 일', [(nm, '/service/%s/' % sl, photos.thumb(photos.CASES[i][0]))
+                                              for i, (sl, nm, _, _) in enumerate(cfg.SERVICES)]),
                            faq_ld(qa)))
         + tpl.header('/')
         + '<h1 class="sr">%s</h1>' % esc(cfg.BRAND + ' — ' + cfg.TAGLINE)
@@ -273,6 +311,7 @@ def home():
           '<a class="btn btn-s" href="/case/">사례 더 보기</a></p></div></section>'
         + '<section><div class="wrap"><span class="kick">PRICE</span><h2>요금 안내</h2>'
         + price_block() + '</div></section>'
+        + home_lt()
         + '<section class="alt"><div class="wrap"><span class="kick">AREA</span>'
           '<h2>출동 지역</h2><p class="lead">시·도를 고르면 시·군·구와 행정동까지 들어갑니다.</p>'
           '<div class="grid g4">' + sido_cards + '</div></div></section>'
@@ -288,8 +327,12 @@ def area_index():
         '<a class="card" href="/area/%s/"><h3>%s</h3><p>%s</p>'
         '<span class="more">%s 지역 보기 →</span></a>'
         % (s['slug'], s['nm'], ' · '.join(g['nm'] for g in s['gus'][:5]), s['nm']) for s in REG)
-    html = (tpl.head(t, d, cfg.HOST + '/area/',
-                     jsonld=ld(crumb([('지역 안내', '/area/')])))
+    html = (tpl.head(t, d, cfg.HOST + '/area/', image=cfg.HOST + og_img('area'),
+                     jsonld=ld(webpage('/area/', t, d, og_img('area'), 'CollectionPage'),
+                               crumb([('지역 안내', '/area/')]),
+                               itemlist('시·도', [(x['nm'], '/area/%s/' % x['slug'],
+                                                  photos.thumb(photos.CASES[i % 35][0]))
+                                                 for i, x in enumerate(REG)])))
             + tpl.header('/area/') + bc_html([('지역 안내', '/area/')])
             + '<section><div class="wrap"><h1>전국 지역 안내</h1>'
               '<p class="lead">시·도를 고르시면 그 안의 시·군·구가 나옵니다. '
@@ -308,8 +351,15 @@ def sido_page(s):
                     '<span class="more">동네까지 보기 →</span></a>'
                     % (g['slug'], g['nm'], ' · '.join(x['nm'] for x in g['dongs'])) for g in s['gus'])
     cr = [('지역 안내', '/area/'), (s['nm'], '/area/%s/' % s['slug'])]
+    ph0 = og_img(s['slug'])
     html = (tpl.head(m['title'], m['desc'], cfg.HOST + '/area/%s/' % s['slug'],
-                     jsonld=ld(crumb(cr),
+                     image=cfg.HOST + ph0,
+                     jsonld=ld(webpage('/area/%s/' % s['slug'], m['title'], m['desc'], ph0),
+                               crumb(cr),
+                               itemlist('%s 시·군·구' % s['nm'],
+                                        [(x['nm'], '/area/%s/' % x['slug'],
+                                          photos.thumb(photos.CASES[i % 35][0]))
+                                         for i, x in enumerate(s['gus'])]),
                                {'@context': 'https://schema.org', '@type': 'Service',
                                 'serviceType': '누수탐지·하수구막힘·배관막힘',
                                 'provider': {'@id': cfg.HOST + '/#org'},
@@ -323,6 +373,7 @@ def sido_page(s):
             + '<section class="alt"><div class="wrap"><h2>%s 시·군·구</h2>'
               '<p class="lead">지역을 고르시면 그 안의 동네로 더 좁힐 수 있습니다.</p>'
               '<div class="grid g3">%s</div></div></section>' % (s['nm'], cards)
+            + sido_lt(s)
             + '<section><div class="wrap"><h2>하는 일</h2>' + svc_grid(n=8) + '</div></section>'
             + tpl.footer())
     w('/area/%s/' % s['slug'], html)
@@ -360,6 +411,18 @@ def shop_cards(s, g, d, sh_list):
            x['nm'], g['nm'], d['nm'], x['k1'], x['k2']) for x in sh_list) + '</div>'
 
 
+def gu_shop_chips(g, n=14):
+    """구 쪽에서 시공점으로 가는 길. **쪽마다 다른 목록**을 내 뒤쪽이 굶지 않게 한다
+       ([[internal-link-fixed-list-starves-the-rest]])."""
+    rows = []
+    for di, d in enumerate(g['dongs']):
+        for x in dong_shops(g, d, di):
+            rows.append((x['nm'], d['nm'], x['slug']))
+    seen = rot_pick(g['slug'] + 'sc', rows, n)
+    return '<ul class="chips">' + ''.join(
+        '<li><a href="/shop/%s/">%s · %s</a></li>' % (sl, nm, dn) for nm, dn, sl in seen) + '</ul>'
+
+
 def gu_page(s, g, gi):
     m = seo.gu(s, g)
     spot = cfg.SPOTS[svg.h(g['slug'], len(cfg.SPOTS))]
@@ -375,17 +438,22 @@ def gu_page(s, g, gi):
         '<span class="more">동네 안내 →</span></a>'
         % (g['slug'], x['slug'], g['nm'], x['nm'], x['nm'] + ' 하수구막힘·배관막힘·누수탐지 안내')
         for x in g['dongs'])
-    sibs = [o for o in s['gus'] if o['slug'] != g['slug']]
-    o = svg.h(g['slug'] + 'sib', max(1, len(sibs)))
-    sib = [sibs[(o + i * 3) % len(sibs)] for i in range(min(6, len(sibs)))]
+    sib = rot_pick(g['slug'] + 'sib', [o for o in s['gus'] if o['slug'] != g['slug']], 6)
     sibhtml = ('<ul class="chips">' + ''.join(
         '<li><a href="/area/%s/">%s %s</a></li>' % (x['slug'], s['nm'], x['nm']) for x in sib)
         + '</ul>') if sib else ''
     ph = pick_photos(g['slug'], spot[0], 3)
     cr = [('지역 안내', '/area/'), (s['nm'], '/area/%s/' % s['slug']),
           (g['nm'], '/area/%s/' % g['slug'])]
+    ph0 = photos.img(ph[0][0])
     html = (tpl.head(m['title'], m['desc'], cfg.HOST + '/area/%s/' % g['slug'],
-                     jsonld=ld(crumb(cr), faq_ld(qa),
+                     image=cfg.HOST + ph0,
+                     jsonld=ld(webpage('/area/%s/' % g['slug'], m['title'], m['desc'], ph0),
+                               crumb(cr), faq_ld(qa),
+                               itemlist('%s 동네' % g['nm'],
+                                        [(x['nm'], '/area/%s/%s/' % (g['slug'], x['slug']),
+                                          photos.thumb(ph[i % 3][0]))
+                                         for i, x in enumerate(g['dongs'])]),
                                {'@context': 'https://schema.org', '@type': 'Service',
                                 'serviceType': '누수탐지·누수공사·하수구막힘·배관막힘',
                                 'provider': {'@id': cfg.HOST + '/#org'},
@@ -405,10 +473,13 @@ def gu_page(s, g, gi):
             + '<section><div class="wrap"><h2>%s 동네별 안내</h2>'
               '<p class="lead">동네를 고르시면 그 골목 이야기와 가까이 움직이는 시공점이 나옵니다.</p>'
               '<div class="grid g3">%s</div></div></section>' % (g['nm'], dcards)
+            + '<section><div class="wrap"><h2>%s 시공점</h2>'
+              '<p class="lead">접수는 대표 전화 한 곳으로 받습니다.</p>%s</div></section>'
+              % (g['nm'], gu_shop_chips(g))
+            + gu_lt(s, g, sib)
             + '<section class="alt"><div class="wrap"><h2>자주 묻는 질문</h2>'
             + faq_block(qa) + '</div></section>'
             + '<section><div class="wrap"><h2>하는 일</h2>' + svc_grid(n=8)
-            + ('<h2 style="margin-top:30px">%s 다른 지역</h2>%s' % (s['nm'], sibhtml) if sib else '')
             + '</div></section>'
             + tpl.footer())
     w('/area/%s/' % g['slug'], html)
@@ -429,8 +500,7 @@ def dong_page(s, g, d, di):
           for i, (q, a) in enumerate(prose.FAQ_D)]
     sibs = [x for x in g['dongs'] if x['slug'] != d['slug']]
     if len(sibs) > 20:
-        o = svg.h(d['slug'], len(sibs))
-        sibs = [sibs[(o + i) % len(sibs)] for i in range(20)]
+        sibs = rot_pick(d['slug'], sibs, 20)
     sibhtml = ('<ul class="chips">' + ''.join(
         '<li><a href="/area/%s/%s/">%s %s</a></li>' % (g['slug'], x['slug'], g['nm'], x['nm'])
         for x in sibs) + '</ul>')
@@ -443,8 +513,13 @@ def dong_page(s, g, d, di):
     area = {'@type': 'AdministrativeArea', 'name': '%s %s %s' % (s['nm'], g['nm'], d['nm'])}
     if geo:
         area['geo'] = geo
-    html = (tpl.head(m['title'], m['desc'], cfg.HOST + url,
-                     jsonld=ld(crumb(cr), faq_ld(qa),
+    ph0 = photos.img(ph[0][0])
+    html = (tpl.head(m['title'], m['desc'], cfg.HOST + url, image=cfg.HOST + ph0,
+                     jsonld=ld(webpage(url, m['title'], m['desc'], ph0),
+                               crumb(cr), faq_ld(qa),
+                               itemlist('%s 시공점' % d['nm'],
+                                        [(x['nm'], '/shop/%s/' % x['slug'],
+                                          photos.thumb(ph[i % 3][0])) for i, x in enumerate(sh)]),
                                {'@context': 'https://schema.org', '@type': 'Service',
                                 'serviceType': '하수구막힘·배관막힘·누수탐지',
                                 'provider': {'@id': cfg.HOST + '/#org'}, 'areaServed': area,
@@ -462,11 +537,11 @@ def dong_page(s, g, d, di):
             + '<section><div class="wrap"><h2>%s 시공점</h2>'
               '<p class="lead">%s 둘레를 맡는 곳입니다. 접수는 대표 전화 한 곳으로 받습니다.</p>'
               '%s</div></section>' % (d['nm'], d['nm'], shop_cards(s, g, d, sh))
+            + dong_lt(s, g, d, sibs)
             + '<section class="alt"><div class="wrap"><h2>자주 묻는 질문</h2>'
             + faq_block(qa) + '</div></section>'
-            + '<section><div class="wrap"><h2>%s 다른 동네</h2>%s'
-              '<h2 style="margin-top:30px">하는 일</h2>%s</div></section>'
-              % (g['nm'], sibhtml, svc_grid(n=6))
+            + '<section><div class="wrap"><h2>하는 일</h2>%s</div></section>'
+              % svc_grid(n=6)
             + tpl.footer())
     w(url, html)
     for j, x in enumerate(sh):
@@ -500,7 +575,10 @@ def shop_page(s, g, d, x, sh, spot):
            'knowsAbout': [x['k1'], x['k2']] + cfg.MAIN_KW}
     if d['lat']:
         biz['geo'] = {'@type': 'GeoCoordinates', 'latitude': d['lat'], 'longitude': d['lng']}
-    html = (tpl.head(m['title'], m['desc'], cfg.HOST + url, jsonld=ld(crumb(cr), biz))
+    html = (tpl.head(m['title'], m['desc'], cfg.HOST + url,
+                     image=cfg.HOST + photos.img(ph[0][0]),
+                     jsonld=ld(webpage(url, m['title'], m['desc'], photos.img(ph[0][0])),
+                               crumb(cr), biz))
             + tpl.header('/area/') + bc_html(cr)
             + '<section><div class="wrap"><div class="grid g2" style="align-items:center">'
               '<div>%s</div><div><h1>%s</h1><p class="lead">%s %s %s · %s·%s</p>'
@@ -518,6 +596,7 @@ def shop_page(s, g, d, x, sh, spot):
                          for sl, nm, _, _ in cfg.SERVICES[:6]))
             + '<section class="alt"><div class="wrap"><h2>작업 사진</h2>%s</div></section>'
               % case_grid(ph)
+            + shop_lt(s, g, d)
             + '<section><div class="wrap"><h2>%s 다른 시공점</h2>%s'
               '<p class="lead" style="margin-top:22px">금액은 현장에서 범위를 보고 '
               '확정해 드립니다. <a class="more" href="/price/">요금 안내 보기 →</a></p>'
@@ -528,11 +607,17 @@ def shop_page(s, g, d, x, sh, spot):
 
 # ══════════════ 서비스 ══════════════
 import prose_svc                                                      # noqa: E402
+import prose_topic                                                    # noqa: E402
 
 
 def service_index():
     t, d = seo.STATIC['service']
-    html = (tpl.head(t, d, cfg.HOST + '/service/', jsonld=ld(crumb([('하는 일', '/service/')])))
+    html = (tpl.head(t, d, cfg.HOST + '/service/', image=cfg.HOST + og_img('svc'),
+                     jsonld=ld(webpage('/service/', t, d, og_img('svc'), 'CollectionPage'),
+                               crumb([('하는 일', '/service/')]),
+                               itemlist('하는 일', [(nm, '/service/%s/' % sl,
+                                                   photos.thumb(photos.CASES[i][0]))
+                                                  for i, (sl, nm, _, _) in enumerate(cfg.SERVICES)])))
             + tpl.header('/service/') + bc_html([('하는 일', '/service/')])
             + hero_block('SERVICE', '막힌 것을 열고', '새는 것을 찾습니다', 'svc')
             + strip_bar()
@@ -562,12 +647,22 @@ def service_page(sv, i):
     sido_chips = '<ul class="chips">' + ''.join(
         '<li><a href="/area/%s/">%s</a></li>' % (s['slug'], s['nm']) for s in REG) + '</ul>'
     cr = [('하는 일', '/service/'), (nm, '/service/%s/' % slug)]
+    is_main = slug in MAIN_SLUG
+    gus = pick_gus('svc' + slug, ALL_GU, 40)
+    sch = [webpage('/service/%s/' % slug, m['title'], m['desc'], photos.img(ph[0][0])),
+           crumb(cr), faq_ld(qa),
+           {'@context': 'https://schema.org', '@type': 'Service',
+            'name': nm, 'serviceType': nm, 'description': one,
+            'provider': {'@id': cfg.HOST + '/#org'},
+            'availableChannel': {'@type': 'ServiceChannel', 'servicePhone': cfg.TEL,
+                                 'serviceUrl': cfg.HOST + '/service/%s/' % slug},
+            'areaServed': {'@type': 'Country', 'name': '대한민국'}}]
+    if is_main:
+        sch.append(itemlist('%s 지역' % nm,
+                            [('%s %s %s' % (a['nm'], b['nm'], nm), topic_url(slug, b),
+                              photos.thumb(ph[i % 6][0])) for i, (a, b) in enumerate(gus)]))
     html = (tpl.head(m['title'], m['desc'], cfg.HOST + '/service/%s/' % slug,
-                     jsonld=ld(crumb(cr), faq_ld(qa),
-                               {'@context': 'https://schema.org', '@type': 'Service',
-                                'name': nm, 'serviceType': nm, 'description': one,
-                                'provider': {'@id': cfg.HOST + '/#org'},
-                                'areaServed': {'@type': 'Country', 'name': '대한민국'}}))
+                     image=cfg.HOST + photos.img(ph[0][0]), jsonld=ld(*sch))
             + tpl.header('/service/') + bc_html(cr)
             + hero_block(nm, '%s' % nm, one, 'svc' + slug)
             + strip_bar()
@@ -582,6 +677,13 @@ def service_page(sv, i):
             + steps_block()
             + '<section class="alt"><div class="wrap"><h2>자주 묻는 질문</h2>'
             + faq_block(qa) + '</div></section>'
+            + (lt_section('%s — 지역별 안내' % nm,
+                           '지역을 고르시면 그 지역의 %s 안내로 들어갑니다.' % nm,
+                           [lt_box(ic, '%s %s' % (a['nm'], nm), '',
+                                   [('%s %s' % (b['nm'], nm), topic_url(slug, b))
+                                    for a2, b in gus if a2['slug'] == a['slug']])
+                            for a in REG if any(x['slug'] == a['slug'] for x, _ in gus)],
+                           alt=True) if is_main else '')
             + '<section><div class="wrap"><h2>지역</h2>'
               '<p class="lead">시·도를 고르시면 시·군·구와 행정동까지 들어갑니다.</p>%s'
               '<h2 style="margin-top:30px">다른 작업</h2>%s</div></section>'
@@ -594,7 +696,26 @@ def service_page(sv, i):
 def static_pages():
     # 요금
     t, d = seo.STATIC['price']
-    w('/price/', tpl.head(t, d, cfg.HOST + '/price/', jsonld=ld(crumb([('요금 안내', '/price/')])))
+    pqa = [('금액을 전화로 알려 주실 수 없나요?',
+            '보지 않고 정한 금액은 현장에서 반드시 달라집니다. 그래서 전화로 못 박지 않습니다. '
+            '대신 어떤 경우에 금액이 갈리는지는 미리 말씀드립니다.'),
+           ('출장비나 점검비가 따로 있나요?',
+            '현장에서 범위를 정해 확정 견적을 말씀드린 다음 시작합니다. '
+            '시작 전에 무엇이 포함되는지 함께 확인합니다.'),
+           ('작업 중에 금액이 올라가기도 하나요?',
+            '처음 말씀드린 범위를 벗어나는 일이 보이면 손을 멈추고 먼저 말씀드립니다. '
+            '말씀 없이 올리지 않습니다.'),
+           ('자재는 직접 준비해도 되나요?',
+            '변기·수전 같은 제품은 직접 준비하셔도 됩니다. 규격이 맞는지 미리 여쭤보시면 '
+            '헛걸음이 줄어듭니다.')]
+    w('/price/', tpl.head(t, d, cfg.HOST + '/price/', image=cfg.HOST + og_img('price'),
+                          jsonld=ld(webpage('/price/', t, d, og_img('price')),
+                                    crumb([('요금 안내', '/price/')]), faq_ld(pqa),
+                                    {'@context': 'https://schema.org', '@type': 'Service',
+                                     'name': '누수·배관 작업 견적', 'serviceType': '견적',
+                                     'description': d,
+                                     'provider': {'@id': cfg.HOST + '/#org'},
+                                     'areaServed': {'@type': 'Country', 'name': '대한민국'}}))
       + tpl.header('/price/') + bc_html([('요금 안내', '/price/')])
       + '<section><div class="wrap"><h1>요금 안내</h1>'
         '<p class="lead">전화로 금액을 못 박지 않습니다. 보지 않고 정한 금액은 '
@@ -617,10 +738,24 @@ def static_pages():
                 ('현장에서 범위 확정', '어디를 어디까지 손대는지 눈으로 보고 정합니다.'),
                 ('확정 금액 안내', '시작 전에 금액을 말씀드립니다. 작업 중에 올리지 않습니다.'),
                 ('작업 후 함께 확인', '물을 다시 흘려 보시는 앞에서 확인하고 마칩니다.')]))
+      + '<h2 style="margin-top:34px">자주 묻는 질문</h2>' + faq_block(pqa)
       + '</div></section>' + tpl.footer())
     # 시공사례
     t, d = seo.STATIC['case']
-    w('/case/', tpl.head(t, d, cfg.HOST + '/case/', jsonld=ld(crumb([('시공 사례', '/case/')])))
+    w('/case/', tpl.head(t, d, cfg.HOST + '/case/',
+                         image=cfg.HOST + photos.img(photos.CASES[0][0]),
+                         jsonld=ld(webpage('/case/', t, d, photos.img(photos.CASES[0][0]),
+                                           'CollectionPage'),
+                                   crumb([('시공 사례', '/case/')]),
+                                   {'@context': 'https://schema.org', '@type': 'ImageGallery',
+                                    'name': t, 'description': d,
+                                    'associatedMedia': [
+                                        {'@type': 'ImageObject',
+                                         'contentUrl': cfg.HOST + photos.img(i),
+                                         'thumbnailUrl': cfg.HOST + photos.thumb(i),
+                                         'caption': cap, 'width': 760, 'height': 570,
+                                         'creator': {'@id': cfg.HOST + '/#org'}}
+                                        for i, k, cap in photos.CASES]}))
       + tpl.header('/case/') + bc_html([('시공 사례', '/case/')])
       + hero_block('REAL WORK', '실제 작업 현장', '사진 그대로', 'case')
       + '<section><div class="wrap"><h1>시공 사례</h1>'
@@ -628,7 +763,16 @@ def static_pages():
       + case_grid(photos.CASES) + '</div></section>' + tpl.footer())
     # 이용안내
     t, d = seo.STATIC['guide']
-    w('/guide/', tpl.head(t, d, cfg.HOST + '/guide/', jsonld=ld(crumb([('이용 안내', '/guide/')])))
+    w('/guide/', tpl.head(t, d, cfg.HOST + '/guide/', image=cfg.HOST + og_img('guide'),
+                          jsonld=ld(webpage('/guide/', t, d, og_img('guide')),
+                                    crumb([('이용 안내', '/guide/')]),
+                                    {'@context': 'https://schema.org', '@type': 'HowTo',
+                                     'name': '접수부터 마무리까지', 'description': d,
+                                     'totalTime': 'PT2H',
+                                     'step': [{'@type': 'HowToStep', 'position': i + 1,
+                                               'name': a, 'text': b,
+                                               'url': cfg.HOST + '/guide/#step%d' % (i + 1)}
+                                              for i, (a, b) in enumerate(STEPS)]}))
       + tpl.header('/guide/') + bc_html([('이용 안내', '/guide/')])
       + '<section><div class="wrap"><h1>이용 안내</h1>'
         '<p class="lead">접수에서 마무리까지 어떤 차례로 움직이는지 적어 두었습니다.</p>'
@@ -671,14 +815,17 @@ def static_pages():
            '전국에서 접수를 받습니다. 지역 안내에서 시·도부터 행정동까지 좁혀 보실 수 있습니다.'),
           ('작업 시간은 얼마나 걸리나요?',
            '한 자리에서 끝나는 일은 대개 그날 끝납니다. 마감을 되돌려야 하면 더 걸립니다.')]
-    w('/faq/', tpl.head(t, d, cfg.HOST + '/faq/',
-                        jsonld=ld(crumb([('자주 묻는 질문', '/faq/')]), faq_ld(qa)))
+    w('/faq/', tpl.head(t, d, cfg.HOST + '/faq/', image=cfg.HOST + og_img('faq'),
+                        jsonld=ld(webpage('/faq/', t, d, og_img('faq'), 'FAQPage'),
+                                  crumb([('자주 묻는 질문', '/faq/')]), faq_ld(qa)))
       + tpl.header('/faq/') + bc_html([('자주 묻는 질문', '/faq/')])
       + '<section><div class="wrap"><h1>자주 묻는 질문</h1>' + faq_block(qa)
       + '</div></section>' + tpl.footer())
     # 소개
     t, d = seo.STATIC['about']
-    w('/about/', tpl.head(t, d, cfg.HOST + '/about/', jsonld=ld(crumb([('소개', '/about/')]), ORG))
+    w('/about/', tpl.head(t, d, cfg.HOST + '/about/', image=cfg.HOST + og_img('about'),
+                          jsonld=ld(webpage('/about/', t, d, og_img('about'), 'AboutPage'),
+                                    crumb([('소개', '/about/')]), ORG, SITE))
       + tpl.header('') + bc_html([('소개', '/about/')])
       + '<section><div class="wrap"><h1>%s 소개</h1>'
         '<p class="lead">%s</p>'
@@ -693,6 +840,216 @@ def static_pages():
         '</div></div></section>' % (cfg.BRAND, cfg.TAGLINE) + tpl.footer())
 
 
+# ══════════════ 롱테일 — 지역 × 주제 ══════════════
+def lt_box(ic, head, note, rows):
+    return ('<div class="box"><h3><span class="ibx">%s</span>%s</h3><p>%s</p><ul>%s</ul></div>'
+            % (svg.ico(ic, COL['acc2'], 18), esc(head), esc(note),
+               ''.join('<li><a href="%s">%s</a></li>' % (u, esc(t)) for t, u in rows)))
+
+
+def lt_section(title, lead, boxes, alt=False):
+    return ('<section%s><div class="wrap"><span class="kick">LONG TAIL</span>'
+            '<h2>%s</h2><p class="lead">%s</p><div class="lt">%s</div></div></section>'
+            % (' class="alt"' if alt else '', esc(title), esc(lead), ''.join(boxes)))
+
+
+def topic_url(svc, g):
+    return '/service/%s/%s/' % (svc, g['slug'])
+
+
+def gu_topic_rows(s, g):
+    """그 구의 네 갈래 롱테일 주소."""
+    return [('%s %s' % (g['nm'], nm), topic_url(sl, g)) for sl, nm, _, _ in MAIN_SVC]
+
+
+def sub_topic_rows(seed, n=6):
+    """보조키워드 꼬리말. **가는 곳은 그 낱말을 실제로 다루는 쪽**이다.
+       ★앵커에 지역을 붙여 놓고 지역과 상관없는 쪽으로 보내면 그게 낚시다.
+         지역이 붙는 꼬리는 **구 쪽이 따로 있는 네 갈래**에만 쓴다.
+       ★씨앗으로 돌려 뽑는다 — 고정 목록이면 뒤쪽 낱말이 굶는다
+         ([[internal-link-fixed-list-starves-the-rest]])."""
+    o = svg.h(seed, len(cfg.SUB_KW))
+    out, used = [], set()
+    for i in range(len(cfg.SUB_KW)):
+        k = cfg.SUB_KW[(o + i) % len(cfg.SUB_KW)]
+        u = '/service/%s/' % SUB_TO_SVC[k]
+        if u in used:            # ★한 상자 안에서 같은 쪽으로 세 번 보내지 않는다
+            continue             #   (수전교체·싱크대수전교체·화장실수전교체가 모두 수전 쪽이다)
+        used.add(u)
+        out.append((k, u))
+        if len(out) >= n:
+            break
+    return out
+
+
+def rot_pick(seed, pool, n):
+    """씨앗으로 돌려 뽑되 **중복을 거르고 모자라면 채운다**.
+       ★`seed + i*상수` 는 길이와 상수의 공약수만큼 통째로 겹친다
+         ([[seeded-pick-linear-offset-collides]]) — 서울 24개 구에서 3씩 건너뛰면
+         8개만 돌고 되풀이된다. 실제로 「서초구 누수탐지」가 두 번 떴다."""
+    if not pool:
+        return []
+    o = svg.h(seed, len(pool))
+    out = []
+    for i in range(len(pool)):
+        x = pool[(o + i) % len(pool)]
+        if x not in out:
+            out.append(x)
+        if len(out) >= n:
+            break
+    return out
+
+
+def pick_gus(seed, pool, n):
+    return rot_pick(seed, pool, n)
+
+
+ALL_GU = [(s, g) for s in REG for g in s['gus']]
+
+
+def home_lt():
+    """홈에서 바로 꼬리 주제로 들어가는 자리. 네 갈래 × 지역."""
+    boxes = []
+    for sl, nm, one, ic in MAIN_SVC:
+        rows = [('%s %s %s' % (s['nm'], g['nm'], nm), topic_url(sl, g))
+                for s, g in pick_gus('home' + sl, ALL_GU, 8)]
+        boxes.append(lt_box(ic, nm, one, rows))
+    boxes.append(lt_box('check', '이런 말로도 찾으십니다',
+                        '보조 작업도 같은 걸음에 봅니다.', sub_topic_rows('homesub', 9)))
+    boxes.append(lt_box('pin', '시·도에서 시작하기', '여기서 시·군·구와 행정동까지 들어갑니다.',
+                        [(x['nm'], '/area/%s/' % x['slug']) for x in REG]))
+    return lt_section('지역 × 주제로 바로 찾기',
+                      '「우리 동네 + 하는 일」로 찾으시는 분이 많아 그대로 길을 내 두었습니다.',
+                      boxes, alt=True)
+
+
+def sido_lt(s):
+    boxes = []
+    for sl, nm, one, ic in MAIN_SVC:
+        rows = [('%s %s' % (g['nm'], nm), topic_url(sl, g))
+                for g in pick_gus(s['slug'] + sl, s['gus'], 10)]
+        boxes.append(lt_box(ic, '%s %s' % (s['nm'], nm), one, rows))
+    return lt_section('%s — 지역 × 주제' % s['nm'],
+                      '시·군·구를 고르면 그 지역의 갈래별 안내로 바로 들어갑니다.', boxes, alt=True)
+
+
+def gu_lt(s, g, sib):
+    boxes = [
+        lt_box('find', '%s 갈래별 안내' % g['nm'], '네 가지로 나눠 따로 적어 두었습니다.',
+               gu_topic_rows(s, g)),
+        lt_box('check', '%s에서 함께 나오는 일' % g['nm'], '한 번 갈 때 묶어서 보는 것들입니다.',
+               sub_topic_rows(g['slug'], 8)),
+    ]
+    if sib:
+        boxes.append(lt_box('pin', '가까운 지역', '옆 지역도 같은 기준으로 봅니다.',
+                            [('%s %s' % (x['nm'], MAIN_SVC[i % 4][1]), topic_url(MAIN_SLUG[i % 4], x))
+                             for i, x in enumerate(sib)]))
+    return lt_section('%s — 주제로 좁혀 보기' % g['nm'],
+                      '하는 일을 먼저 고르시면 그 갈래만 모아 보실 수 있습니다.', boxes)
+
+
+def dong_lt(s, g, d, sibs):
+    seed = g['slug'] + d['slug']
+    boxes = [
+        lt_box('find', '%s이 속한 %s 갈래별 안내' % (d['nm'], g['nm']),
+               '%s도 같은 기준으로 움직입니다.' % d['nm'], gu_topic_rows(s, g)),
+        lt_box('check', '이런 일로도 부르십니다', '보조 작업은 같은 걸음에 봅니다.',
+               sub_topic_rows(seed, 8)),
+    ]
+    if sibs:
+        boxes.append(lt_box('pin', '%s 가까운 동네' % g['nm'], '둘레 골목도 같은 기사가 돕니다.',
+                            [(x['nm'], '/area/%s/%s/' % (g['slug'], x['slug']))
+                             for x in sibs[:12]]))
+    return lt_section('%s — 주제로 좁혀 보기' % d['nm'],
+                      '찾으시는 일을 고르시면 그 갈래 안내로 들어갑니다.', boxes)
+
+
+def shop_lt(s, g, d):
+    return lt_section('%s %s — 주제로 보기' % (g['nm'], d['nm']),
+                      '하는 일별 안내와 가까운 동네입니다.',
+                      [lt_box('find', '%s 갈래별 안내' % g['nm'], '네 가지로 나눠 적어 두었습니다.',
+                              gu_topic_rows(s, g)),
+                       lt_box('check', '함께 나오는 일', '같은 걸음에 보는 것들입니다.',
+                              sub_topic_rows(d['slug'], 8))], alt=True)
+
+
+SUB_TO_SVC = {
+    '배관설비': 'plumbing', '수전교체': 'faucet', '싱크대수전교체': 'faucet',
+    '화장실수전교체': 'faucet', '변기막힘': 'toilet', '화장실변기교체': 'toilet',
+    '변기부속품수리': 'toilet', '싱크대하수구막힘': 'kitchen', '세면대막힘': 'bath',
+    '세면대교체': 'bath', '배수구막힘': 'drain', '배수구뚫음': 'drain',
+    '욕실배관누수': 'leak-fix', '수도누수': 'leak-find', '수도수리': 'plumbing',
+    '주방배관누수': 'leak-fix', '주방배수구막힘': 'kitchen',
+}
+
+
+def topic_page(s, g, sv, gi):
+    """행정구 × 메인키워드 — 「강남구 누수탐지」처럼 **지역+하는 일**로 찾는 말을 받는 쪽."""
+    slug, nm, one, ic = sv
+    url = topic_url(slug, g)
+    ks = sub_kw(g['slug'])
+    V = {'S': s['nm'], 'G': g['nm'], 'N': g['dongs'][0]['nm'],
+         'K1': ks[3], 'K2': ks[7]}
+    seed = g['slug'] + slug
+    body = ''.join(
+        '<h3>%s</h3><p>%s</p>'
+        % (bank.bold(bank.fill(bank.spin(h, seed, i), V)),
+           bank.bold(bank.fill(bank.spin(b, seed, i), V)))
+        for i, (h, b) in enumerate(zip(prose_topic.HEAD[slug], prose_topic.BODY[slug])))
+    qa = [(bank.fill(q, V), bank.fill(a, V)) for q, a in prose_topic.FAQ[slug]]
+    m = seo.topic(s, g, sv)
+    ph = pick_photos(seed, None, 3)
+    dongs = g['dongs'] if len(g['dongs']) <= 18 else rot_pick(seed, g['dongs'], 18)
+    dchips = '<ul class="chips">' + ''.join(
+        '<li><a href="/area/%s/%s/">%s</a></li>' % (g['slug'], d['slug'], d['nm'])
+        for d in dongs) + '</ul>'
+    sib = rot_pick(seed + 'sib', [o for o in s['gus'] if o['slug'] != g['slug']], 10)
+    boxes = [
+        lt_box(ic, '%s 안에서 %s' % (g['nm'], nm), '동네를 고르시면 그 골목 이야기로 들어갑니다.',
+               [(d['nm'], '/area/%s/%s/' % (g['slug'], d['slug'])) for d in dongs[:12]]),
+        lt_box('pin', '%s 다른 지역의 %s' % (s['nm'], nm), '가까운 지역도 같은 기준으로 봅니다.',
+               [('%s %s' % (x['nm'], nm), topic_url(slug, x)) for x in sib]),
+        lt_box('check', '%s에서 함께 보는 일' % g['nm'], '한 번 갈 때 묶어서 보는 것들입니다.',
+               [r for r in gu_topic_rows(s, g) if r[1] != url] + sub_topic_rows(seed, 5)),
+    ]
+    cr = [('하는 일', '/service/'), (nm, '/service/%s/' % slug),
+          ('%s %s' % (s['nm'], g['nm']), url)]
+    area = {'@type': 'AdministrativeArea', 'name': '%s %s' % (s['nm'], g['nm']),
+            'geo': {'@type': 'GeoCoordinates', 'latitude': g['lat'], 'longitude': g['lng']}}
+    html = (tpl.head(m['title'], m['desc'], cfg.HOST + url, image=cfg.HOST + photos.img(ph[0][0]),
+                     jsonld=ld(webpage(url, m['title'], m['desc'], photos.img(ph[0][0])),
+                               crumb(cr, url), faq_ld(qa),
+                               {'@context': 'https://schema.org', '@type': 'Service',
+                                'name': '%s %s' % (g['nm'], nm), 'serviceType': nm,
+                                'description': m['desc'], 'provider': {'@id': cfg.HOST + '/#org'},
+                                'areaServed': area,
+                                'availableChannel': {'@type': 'ServiceChannel',
+                                                     'servicePhone': cfg.TEL,
+                                                     'serviceUrl': cfg.HOST + url}},
+                               itemlist('%s %s 동네' % (g['nm'], nm),
+                                        [(d['nm'], '/area/%s/%s/' % (g['slug'], d['slug']),
+                                          photos.thumb(ph[i % 3][0])) for i, d in enumerate(dongs)])))
+            + tpl.header('/service/') + bc_html(cr)
+            + hero_block('%s %s' % (s['nm'], g['nm']), '%s %s' % (g['nm'], nm), one, seed)
+            + strip_bar(seed)
+            + '<section><div class="wrap"><h1>%s %s %s — 24시 접수</h1>'
+              '<p class="lead">%s</p><div class="read">%s</div></div></section>'
+              % (s['nm'], g['nm'], nm, esc(m['desc']), body)
+            + '<section class="alt"><div class="wrap"><h2>%s %s 작업 사진</h2>%s</div></section>'
+              % (g['nm'], nm, case_grid(ph))
+            + lt_section('%s %s — 더 좁혀 보기' % (g['nm'], nm),
+                         '동네로 좁히거나, 가까운 지역을 보시거나, 함께 나오는 일을 보십시오.', boxes)
+            + '<section class="alt"><div class="wrap"><h2>자주 묻는 질문</h2>%s</div></section>'
+              % faq_block(qa)
+            + '<section><div class="wrap"><h2>%s 동네</h2>%s'
+              '<h2 style="margin-top:28px">%s 전체 안내</h2>'
+              '<ul class="chips"><li><a href="/area/%s/">%s %s 지역 안내</a></li>'
+              '<li><a href="/service/%s/">%s 전국 안내</a></li>'
+              '<li><a href="/price/">요금 안내</a></li></ul></div></section>'
+              % (g['nm'], dchips, g['nm'], g['slug'], s['nm'], g['nm'], slug, nm)
+            + tpl.footer())
+    w(url, html)
+
 # ══════════════ 자산·색인 ══════════════
 def assets():
     w('/s.css', tpl.CSS)
@@ -705,12 +1062,14 @@ def assets():
         ensure_ascii=False))
 
 
-def sitemaps():
+def sitemaps(extra=()):
     today = NOW.strftime('%Y-%m-%d')
-    groups = {'main': [], 'area': [], 'shop': []}
+    groups = {'main': [], 'area': [], 'topic': [], 'shop': []}
     for u in URLS:
-        groups['shop' if u.startswith('/shop/') else
-               ('area' if u.startswith('/area/') else 'main')].append(u)
+        k = ('shop' if u.startswith('/shop/') else
+             'area' if u.startswith('/area/') else
+             'topic' if u.startswith('/service/') and u.count('/') == 4 else 'main')
+        groups[k].append(u)
     names = []
     for g, us in groups.items():
         for n in range(0, len(us), 4000):
@@ -725,6 +1084,7 @@ def sitemaps():
                      '1.0' if u == '/' else ('0.8' if u.count('/') <= 3 else '0.6'))
                   for u in chunk) + '</urlset>')
             names.append(fn)
+    names += list(extra)
     w('/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>'
       '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join(
           '<sitemap><loc>%s%s</loc><lastmod>%s</lastmod></sitemap>' % (cfg.HOST, n, today)
@@ -733,12 +1093,34 @@ def sitemaps():
 
 
 def rss():
-    """네이버에 넣을 RSS. 최근 올린 쪽을 앞에 둔다."""
-    items = ['/'] + ['/service/%s/' % s[0] for s in cfg.SERVICES] + \
-            ['/price/', '/case/', '/guide/', '/faq/', '/area/'] + \
-            [u for u in URLS if u.startswith('/area/') and u.count('/') == 4][:30]
+    """네이버 서치어드바이저에 넣을 RSS.
+
+    ★RSS 는 **「여기부터 보라」는 줄 세우기**다. 1만 2천 쪽을 다 넣을 수 없으니
+      ①홈·하는 일 ②지역×주제 롱테일 ③시도 ④구 ⑤동 차례로 100건을 고른다.
+    ★고르는 자리는 **씨앗으로 돌린다** — 다시 구울 때마다 다른 쪽이 앞에 선다.
+    """
+    topic = [u for u in URLS if u.startswith('/service/') and u.count('/') == 4]
+    gu = [u for u in URLS if u.startswith('/area/') and u.count('/') == 3]
+    dong = [u for u in URLS if u.startswith('/area/') and u.count('/') == 4]
+    seed = NOW.strftime('%Y%m%d')
+
+    def rot(lst, n):
+        if not lst:
+            return []
+        o = svg.h(seed + str(len(lst)), len(lst))
+        return [lst[(o + i * 7) % len(lst)] for i in range(min(n, len(lst)))]
+
+    items = (['/'] + ['/service/%s/' % x[0] for x in cfg.SERVICES]
+             + ['/area/', '/price/', '/case/', '/guide/', '/faq/', '/about/']
+             + rot(topic, 34) + ['/area/%s/' % x['slug'] for x in REG]
+             + rot(gu, 16) + rot(dong, 16))
+    seen = []
+    for u in items:
+        if u not in seen:
+            seen.append(u)
+    items = seen
     body = []
-    for i, u in enumerate(items[:50]):
+    for i, u in enumerate(items[:100]):
         ttl = TITLES.get(u, cfg.BRAND)
         dsc = DESCS.get(u, cfg.TAGLINE)
         pub = (NOW - timedelta(hours=i)).strftime('%a, %d %b %Y %H:%M:%S +0900')
@@ -754,6 +1136,22 @@ def rss():
       '<lastBuildDate>%s</lastBuildDate>%s</channel></rss>'
       % (cfg.BRAND, cfg.TAGLINE, cfg.HOST, cfg.HOST, cfg.TAGLINE,
          NOW.strftime('%a, %d %b %Y %H:%M:%S +0900'), ''.join(body)))
+
+
+def image_sitemap():
+    """그림 사이트맵 — 네이버·구글 이미지 쪽에 작업 사진을 알린다."""
+    rows = []
+    for i, k, cap in photos.CASES:
+        rows.append('<image:image><image:loc>%s%s</image:loc>'
+                    '<image:title>%s</image:title><image:caption>%s</image:caption></image:image>'
+                    % (cfg.HOST, photos.img(i), esc(cap), esc(cap)))
+    w('/sitemap-image.xml',
+      '<?xml version="1.0" encoding="UTF-8"?>'
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+      'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
+      '<url><loc>%s/case/</loc><lastmod>%s</lastmod>%s</url></urlset>'
+      % (cfg.HOST, NOW.strftime('%Y-%m-%d'), ''.join(rows)))
+    return '/sitemap-image.xml'
 
 
 def robots(maps):
@@ -798,19 +1196,23 @@ def build():
         sido_page(s)
         for gi, g in enumerate(s['gus']):
             gu_page(s, g, gi)
+            for sv in MAIN_SVC:
+                topic_page(s, g, sv, gi)
             for di, d in enumerate(g['dongs']):
                 dong_page(s, g, d, di)
     assets()
-    maps = sitemaps()
+    maps = sitemaps(extra=[image_sitemap()])
     rss()
     robots(maps)
     n_area = len([u for u in URLS if u.startswith('/area/')])
     n_shop = len([u for u in URLS if u.startswith('/shop/')])
+    n_topic = len([u for u in URLS if u.startswith('/service/') and u.count('/') == 4])
     tot = 0
     for r, _, fs in os.walk(OUT):
         tot += sum(os.path.getsize(os.path.join(r, f)) for f in fs)
-    print('쪽 %d장 (지역 %d · 시공점 %d · 그 밖 %d) · %.1fMB'
-          % (len(URLS), n_area, n_shop, len(URLS) - n_area - n_shop, tot / 1048576))
+    print('쪽 %d장 (지역 %d · 시공점 %d · 롱테일 %d · 그 밖 %d) · %.1fMB'
+          % (len(URLS), n_area, n_shop, n_topic,
+             len(URLS) - n_area - n_shop - n_topic, tot / 1048576))
 
 
 if __name__ == '__main__':

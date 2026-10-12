@@ -165,12 +165,24 @@ footer a:hover{color:%(tx)s}
 .callbar svg{stroke:%(ink)s}
 .callbar b{font-size:15px;background:rgba(0,0,0,.14);padding:3px 9px;border-radius:999px}
 
+/* ── 롱테일 주제 ── */
+.lt{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.lt .box{background:%(card)s;border:1px solid %(line)s;border-radius:15px;padding:16px 18px;min-width:0}
+.lt .box h3{display:flex;align-items:center;gap:9px;margin:0 0 11px;font-size:16.5px}
+.lt .box h3 .ibx{width:32px;height:32px;border-radius:9px;flex:0 0 32px}
+.lt ul{display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:0;list-style:none}
+.lt a{display:inline-block;padding:7px 12px;border-radius:999px;background:%(bg2)s;
+ border:1px solid %(line)s;font-size:14px;font-weight:600;color:#D7E3EC}
+.lt a:hover{border-color:%(acc2)s;color:%(acc2)s;background:rgba(47,212,192,.08)}
+.lt .box p{margin:0 0 10px;color:%(mut)s;font-size:13.6px}
+
 /* ── 빵부스러기 ── */
 .bc{font-size:13.5px;color:%(mut)s;padding:14px 0 0}
 .bc a{color:%(mut)s}
 .bc a:hover{color:%(acc2)s}
 
 @media(max-width:900px){
+ .lt{grid-template-columns:1fr}
  nav.nav{display:none}
  .mbtn{display:block}
  .tel-top{display:none}
@@ -191,7 +203,7 @@ footer a:hover{color:%(tx)s}
 """ % COL
 
 
-def head(title, desc, canon, extra='', jsonld=''):
+def head(title, desc, canon, extra='', jsonld='', image=''):
     v = ('<meta name="naver-site-verification" content="%s">' % cfg.VERIFY_NAVER) if cfg.VERIFY_NAVER else ''
     return (
         '<!doctype html><html lang="ko"><head><meta charset="utf-8">'
@@ -201,12 +213,18 @@ def head(title, desc, canon, extra='', jsonld=''):
         '<meta property="og:type" content="website"><meta property="og:title" content="%s">'
         '<meta property="og:description" content="%s"><meta property="og:url" content="%s">'
         '<meta property="og:site_name" content="%s"><meta name="theme-color" content="%s">'
+        '<meta property="og:locale" content="ko_KR">'
+        '<meta name="twitter:card" content="summary_large_image">'
+        '%s'
         '<link rel="icon" href="/favicon.svg" type="image/svg+xml">'
         '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>'
         '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/'
         'dist/web/variable/pretendardvariable-dynamic-subset.min.css">'
         '<link rel="stylesheet" href="/s.css">%s%s%s</head><body>'
-        % (title, desc, canon, title, desc, canon, cfg.BRAND, COL['bg'], v, extra, jsonld))
+        % (title, desc, canon, title, desc, canon, cfg.BRAND, COL['bg'],
+           ('<meta property="og:image" content="%s"><meta name="twitter:image" content="%s">'
+            % (image, image)) if image else '',
+           v, extra, jsonld))
 
 
 NAV = [('/', '홈'), ('/service/', '서비스'), ('/area/', '지역'), ('/price/', '요금'),

@@ -77,6 +77,17 @@ def shop(sh, g, d, k1, k2):
     }
 
 
+def topic(s, g, sv):
+    """행정구 × 메인키워드 — 「강남구 누수탐지」 꼴. 제목 맨 앞이 그대로 검색어다."""
+    slug, nm, one, _ = sv
+    head = ('%s %s' % (s['nm'], g['nm'])) if g['nm'] in AMBIG else ('%s %s' % (s['nm'], g['nm']))
+    return {
+        'title': '%s %s 24시 출동 — 누수·막힘 전문 | %s' % (head, nm, BRAND),
+        'desc': _d('%s %s %s 작업을 24시간 접수합니다. %s'
+                   % (s['nm'], g['nm'], nm, one.rstrip('.') + '.'), g['slug'] + slug),
+    }
+
+
 def service(sv):
     slug, nm, one, _ = sv
     return {
